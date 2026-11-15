@@ -46,11 +46,11 @@ final class TG: ObservableObject {
         switch u {
         case .updateAuthorizationState(let s): auth(s.authorizationState)
         case .updateNewChat(let c): chats[c.chat.id] = c.chat; fetchPhoto(c.chat.photo?.small)
-        case .updateChatLastMessage(let c): chats[c.chatId]?.lastMessage = c.lastMessage
-        case .updateChatReadInbox(let c): chats[c.chatId]?.unreadCount = c.unreadCount
-        case .updateChatTitle(let c): chats[c.chatId]?.title = c.title
+        case .updateChatLastMessage(let c): refreshChat(c.chatId)
+        case .updateChatReadInbox(let c): refreshChat(c.chatId)
+        case .updateChatTitle(let c): refreshChat(c.chatId)
         case .updateUser(let c): users[c.user.id] = c.user; fetchPhoto(c.user.profilePhoto?.small)
-        case .updateUserStatus(let c): users[c.userId]?.status = c.status
+        case .updateUserStatus(let c): refreshUser(c.userId)
         case .updateFile(let c): if c.file.local.isDownloadingCompleted { files[c.file.id] = c.file.local.path }
         case .updateNewMessage(let c):
             keep(c.message); save()
@@ -66,6 +66,14 @@ final class TG: ObservableObject {
             save()
         default: break
         }
+    }
+
+    func refreshChat(_ id: Int64) {
+        Task { if let c = try? await client.getChat(chatId: id) { chats[id] = c } }
+    }
+
+    func refreshUser(_ id: Int64) {
+        Task { if let u = try? await client.getUser(userId: id) { users[id] = u } }
     }
 
     func auth(_ s: AuthorizationState) {
@@ -95,7 +103,7 @@ final class TG: ObservableObject {
         fetchPhoto(m.profilePhoto?.small)
         bio = (try? await client.getUserFullInfo(userId: m.id).bio?.text) ?? ""
         _ = try? await client.loadChats(chatList: .chatListMain, limit: 60)
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
     }
 
     func run(_ f: @escaping () async throws -> Void) {
@@ -141,7 +149,7 @@ final class TG: ObservableObject {
             _ = try await self.client.sendMessage(
                 chatId: chat,
                 inputMessageContent: .inputMessageText(InputMessageText(clearDraft: true, linkPreviewOptions: nil, text: FormattedText(entities: [], text: s))),
-                messageThreadId: 0, options: nil, replyMarkup: nil, replyTo: nil)
+                options: nil, replyMarkup: nil, replyTo: nil, topicId: nil)
         }
     }
 
