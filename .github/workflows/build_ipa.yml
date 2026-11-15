@@ -1,0 +1,75 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Inject API keys from Secrets
+        env:
+          API_ID: ${{ secrets.TG_API_ID }}
+          API_HASH: ${{ secrets.TG_API_HASH }}
+        run: |
+          if [ -n "$API_ID" ] && [ -n "$API_HASH" ]; then
+            sed -i '' "s/static let apiId = 0/static let apiId = $API_ID/" files/TG.swift
+            sed -i '' "s/static let apiHash = \"\"/static let apiHash = \"$API_HASH\"/" files/TG.swift
+          fi
+
+      - name: Install XcodeGen & Generate Project
+        run: |
+          brew install xcodegen
+          cat << 'EOF' > project.yml
+          name: tg_apple
+          options:
+            bundleIdPrefix: com.ddeskonet
+          packages:
+            TDLibKit:
+              url: https://github.com/Swiftgram/TDLibKit
+              from: 1.0.0
+          targets:
+            tg_apple:
+              type: application
+              platform: iOS
+              deploymentTarget: "16.0"
+              sources: [files]
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.ddeskonet.tgapple
+                  GENERATE_INFOPLIST_FILE: YES
+                  INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+                  INFOPLIST_KEY_UILaunchScreen_Generation: YES
+                  INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+              dependencies:
+                - package: TDLibKit
+          EOF
+          xcodegen generate
+
+      - name: Build Unsigned Archive
+        run: |
+          xcodebuild clean archive \
+            -project tg_apple.xcodeproj \
+            -scheme tg_apple \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/tg_apple.xcarchive \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package IPA
+        run: |
+          mkdir -p $RUNNER_TEMP/Payload
+          cp -r $RUNNER_TEMP/tg_apple.xcarchive/Products/Applications/*.app $RUNNER_TEMP/Payload/
+          cd $RUNNER_TEMP
+          zip -r tg_apple.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: tg_apple-ipa
+          path: ${{ runner.temp }}/tg_apple.ipa
