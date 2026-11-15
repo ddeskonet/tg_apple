@@ -256,7 +256,10 @@ struct SettingsView: View {
 
 struct ProfileView: View {
     @EnvironmentObject var tg: TG
-    @State private var first = "", last = "", about = "", uname = ""
+    @State private var first = ""
+    @State private var last = ""
+    @State private var about = ""
+    @State private var uname = ""
     @State private var pick: PhotosPickerItem?
     var body: some View {
         Form {
