@@ -30,7 +30,7 @@ jobs:
           packages:
             TDLibKit:
               url: https://github.com/Swiftgram/TDLibKit
-              from: 1.0.0
+              branch: main
           targets:
             tg_apple:
               type: application
