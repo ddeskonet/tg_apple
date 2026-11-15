@@ -188,6 +188,8 @@ struct ChatView: View {
 struct Bubble: View {
     let m: Msg
     var body: some View {
+        let fgColor: Color = m.deleted ? Theme.muted : (m.out ? Color.black : Theme.text)
+        let bgColor: Color = m.deleted ? Color.clear : (m.out ? Theme.accent : Theme.card)
         HStack {
             if m.out { Spacer(minLength: 50) }
             VStack(alignment: .trailing, spacing: 2) {
@@ -197,8 +199,8 @@ struct Bubble: View {
                     .font(.caption2).opacity(0.6)
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
-            .foregroundStyle(m.deleted ? Theme.muted : (m.out ? Color.black : Theme.text))
-            .background(m.deleted ? Color.clear : (m.out ? Theme.accent : Theme.card))
+            .foregroundStyle(fgColor)
+            .background(bgColor)
             .clipShape(RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
@@ -215,10 +217,11 @@ struct PeopleView: View {
     var body: some View {
         NavigationStack {
             List(tg.people, id: \.id) { u in
+                let fullName = "\(u.firstName) \(u.lastName)".trimmingCharacters(in: .whitespaces)
                 HStack(spacing: 14) {
                     Avatar(title: u.firstName, file: u.profilePhoto?.small, online: tg.isOn(u))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text((u.firstName + " " + u.lastName).trimmingCharacters(in: .whitespaces)).bold()
+                        Text(fullName).bold()
                         Text(tg.seen(u)).font(.subheadline).foregroundStyle(tg.isOn(u) ? Theme.accent : Theme.muted)
                     }
                 }
@@ -232,6 +235,18 @@ struct PeopleView: View {
 
 struct SettingsView: View {
     @EnvironmentObject var tg: TG
+    var fullName: String {
+        let f = tg.me?.firstName ?? ""
+        let l = tg.me?.lastName ?? ""
+        return "\(f) \(l)".trimmingCharacters(in: .whitespaces)
+    }
+    var subTitle: String {
+        let phone = tg.me?.phoneNumber ?? ""
+        if let uname = tg.me?.usernames?.activeUsernames.first, !uname.isEmpty {
+            return "+\(phone) · @\(uname)"
+        }
+        return "+\(phone)"
+    }
     var body: some View {
         NavigationStack {
             List {
@@ -239,10 +254,8 @@ struct SettingsView: View {
                     HStack(spacing: 14) {
                         Avatar(title: tg.me?.firstName ?? "", file: tg.me?.profilePhoto?.small, size: 72)
                         VStack(alignment: .leading) {
-                            Text(((tg.me?.firstName ?? "") + " " + (tg.me?.lastName ?? "")).trimmingCharacters(in: .whitespaces))
-                                .font(.system(size: 22, design: .serif))
-                            Text("+" + (tg.me?.phoneNumber ?? "") + (tg.me?.usernames?.activeUsernames.first.map { " · @" + $0 } ?? ""))
-                                .font(.footnote).foregroundStyle(Theme.muted)
+                            Text(fullName).font(.system(size: 22, design: .serif))
+                            Text(subTitle).font(.footnote).foregroundStyle(Theme.muted)
                         }
                     }
                 }.listRowBackground(Theme.card)
@@ -262,6 +275,8 @@ struct ProfileView: View {
     @State private var uname = ""
     @State private var pick: PhotosPickerItem?
     var body: some View {
+        let phoneStr = "+\(tg.me?.phoneNumber ?? "")"
+        let idStr = "\(tg.me?.id ?? 0)"
         Form {
             Section {
                 VStack(spacing: 8) {
@@ -276,9 +291,9 @@ struct ProfileView: View {
                 TextField("Имя пользователя", text: $uname).textInputAutocapitalization(.never).autocorrectionDisabled()
             }
             Section {
-                LabeledContent("Телефон", value: "+" + (tg.me?.phoneNumber ?? ""))
-                Button { UIPasteboard.general.string = "\(tg.me?.id ?? 0)" } label: {
-                    LabeledContent("ID (нажмите, чтобы скопировать)", value: "\(tg.me?.id ?? 0)")
+                LabeledContent("Телефон", value: phoneStr)
+                Button { UIPasteboard.general.string = idStr } label: {
+                    LabeledContent("ID (нажмите, чтобы скопировать)", value: idStr)
                 }
             }
             Button("Сохранить") { tg.saveProfile(first: first, last: last, about: about, username: uname) }
@@ -287,7 +302,9 @@ struct ProfileView: View {
         .scrollContentBackground(.hidden).background(Theme.bg)
         .navigationTitle("Мой профиль")
         .onAppear {
-            first = tg.me?.firstName ?? ""; last = tg.me?.lastName ?? ""; about = tg.bio
+            first = tg.me?.firstName ?? ""
+            last = tg.me?.lastName ?? ""
+            about = tg.bio
             uname = tg.me?.usernames?.activeUsernames.first ?? ""
         }
         .onChange(of: pick) { _ in
